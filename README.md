@@ -1,5 +1,5 @@
 # ChatGPT Memo Marker
-
+![screenshot](docs/screenshot.png)
 ChatGPTの各メッセージにメモ保存ボタンを追加できるChrome / Edge拡張です。
 
 気になった回答や後で見返したい会話を保存し、自分用のメモを付けて管理できます。
