@@ -2,6 +2,8 @@
 ![screenshot](docs/screenshot.png)
 ChatGPTの各メッセージにメモ保存ボタンを追加できるChrome / Edge拡張です。
 
+A browser extension for saving ChatGPT responses and personal notes.
+
 気になった回答や後で見返したい会話を保存し、自分用のメモを付けて管理できます。
 
 ## Features
@@ -63,6 +65,18 @@ ChatGPTの各メッセージにメモ保存ボタンを追加できるChrome / E
 この拡張はChatGPTの画面構造に依存しています。
 
 ChatGPT側の仕様変更により一部機能が利用できなくなる場合があります。
+
+本拡張機能のデータはブラウザのローカルストレージに保存されます。
+
+以下の場合、保存したメモが失われる可能性があります。
+
+* ブラウザデータを削除した場合
+* 拡張機能を削除した場合
+* OSやブラウザの再インストールを行った場合
+* 別のPCやブラウザを使用した場合
+
+重要なデータは別途バックアップすることを推奨します。
+
 
 ## License
 
