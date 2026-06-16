@@ -1,0 +1,2 @@
+# ChatGPTMemoMarker
+ChatGPTにメモ機能をつけるブラウザ拡張機能
