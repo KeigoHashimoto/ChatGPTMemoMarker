@@ -288,10 +288,14 @@ async function renderPanel(selectedId = null) {
     });
 
     panel.appendChild(title);
+
+    if (selectedItem && selectedItem.id === item.id) {
+      panel.appendChild(createMemoDetail(selectedItem));
+    }
   });
+}
 
-  if (!selectedItem) return;
-
+function createMemoDetail(selectedItem) {
   const detail = document.createElement('div');
   detail.className = 'cg-memo-detail';
 
@@ -366,8 +370,7 @@ async function renderPanel(selectedId = null) {
   detail.appendChild(memo);
   detail.appendChild(copyButton);
   detail.appendChild(deleteButton);
-
-  panel.appendChild(detail);
+  return detail;
 }
 
 /**
