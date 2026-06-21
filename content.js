@@ -1,4 +1,24 @@
 const STORAGE_KEY = `chatgpt-memo-markers:${location.pathname}`;
+const PANEL_COLLAPSED_KEY = `chatgpt-memo-panel-collapsed:${location.pathname}`;
+const SMALL_SCREEN_QUERY = '(max-width: 1430px), (max-height: 760px)';
+let isPanelCollapsed = window.matchMedia(SMALL_SCREEN_QUERY).matches;
+
+try {
+  const storedPanelState = localStorage.getItem(PANEL_COLLAPSED_KEY);
+  if (storedPanelState !== null) {
+    isPanelCollapsed = storedPanelState === '1';
+  }
+} catch (error) {
+  console.warn('ChatGPT Memo Marker: panel state load failed', error);
+}
+
+function savePanelCollapsedState() {
+  try {
+    localStorage.setItem(PANEL_COLLAPSED_KEY, isPanelCollapsed ? '1' : '0');
+  } catch (error) {
+    console.warn('ChatGPT Memo Marker: panel state save failed', error);
+  }
+}
 
 /**
  * 指定した時間だけ処理を待機します。
@@ -261,11 +281,36 @@ async function renderPanel(selectedId = null) {
     : null;
 
   panel.innerHTML = '';
+  panel.classList.toggle('cg-memo-panel--collapsed', isPanelCollapsed);
 
   const header = document.createElement('div');
   header.className = 'cg-memo-title';
-  header.textContent = `ChatGPT Memo (${items.length})`;
+
+  const titleText = document.createElement('span');
+  titleText.textContent = `ChatGPT Memo (${items.length})`;
+  header.appendChild(titleText);
+
+  const toggleButton = document.createElement('button');
+  toggleButton.type = 'button';
+  toggleButton.className = 'cg-memo-toggle-button';
+  toggleButton.textContent = isPanelCollapsed ? '開く' : '閉じる';
+  toggleButton.setAttribute(
+    'aria-label',
+    isPanelCollapsed ? 'メモ一覧パネルを開く' : 'メモ一覧パネルを閉じる'
+  );
+
+  toggleButton.addEventListener('click', async () => {
+    isPanelCollapsed = !isPanelCollapsed;
+    savePanelCollapsedState();
+    await renderPanel(selectedId);
+  });
+
+  header.appendChild(toggleButton);
   panel.appendChild(header);
+
+  if (isPanelCollapsed) {
+    return;
+  }
 
   if (items.length === 0) {
     const empty = document.createElement('div');
