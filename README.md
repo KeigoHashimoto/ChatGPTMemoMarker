@@ -23,6 +23,14 @@ A browser extension for saving ChatGPT responses and personal notes.
 
 ## Installation
 
+Google Chrome
+* Chrome ウェブストアから ChatGPT Memo Marker をインストールします。
+
+https://chromewebstore.google.com/detail/chatgpt-memo-marker/ebcdkmmnkphjcgiogpahiainaihllaon?hl=ja&utm_source=ext_sidebar
+
+* ChatGPT を開きます。
+* 各メッセージに表示される + MEMO ボタンからメモを保存できます。
+
 ### Chrome
 
 1. `chrome://extensions/`
