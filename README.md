@@ -49,7 +49,7 @@ https://chromewebstore.google.com/detail/chatgpt-memo-marker/ebcdkmmnkphjcgiogpa
 
 1. ChatGPTの会話ページを開く
 2. 保存したいメッセージの `+ MEMO` ボタンをクリック
-3. 画面右下の `ChatGPT Memo` パネルから保存済み内容を確認
+3. ヘッダーの `ChatGPT Memo` ボタンをクリックして保存済み内容を確認
 4. 保存済みメモのタイトルをクリックして詳細を開く
 5. 自分用メモを追加
 6. 必要に応じて内容をコピー、またはメモを削除
