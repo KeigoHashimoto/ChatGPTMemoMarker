@@ -89,6 +89,8 @@
 }
 
 .cg-memo-header-host {
+  --cg-memo-header-color: #2f2f2f;
+  --cg-memo-header-hover-bg: rgba(0, 0, 0, .06);
   position: relative;
   flex: 0 0 auto;
   display: inline-flex;
@@ -117,7 +119,7 @@
   font-weight: 500;
   line-height: 1;
   background: transparent;
-  color: #2f2f2f;
+  color: var(--cg-memo-header-color);
   white-space: nowrap;
 }
 
@@ -130,12 +132,24 @@
 }
 
 .cg-memo-header-button:hover {
-  background: rgba(0, 0, 0, .06);
+  background: var(--cg-memo-header-hover-bg);
 }
 
 .cg-memo-header-button:focus-visible {
   outline: 2px solid #91caff;
   outline-offset: 2px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .cg-memo-header-host {
+    --cg-memo-header-color: #ececf1;
+    --cg-memo-header-hover-bg: rgba(255, 255, 255, .1);
+  }
+}
+
+:is(html.dark, body.dark, [data-theme="dark"], [data-mode="dark"]) .cg-memo-header-host {
+  --cg-memo-header-color: #ececf1;
+  --cg-memo-header-hover-bg: rgba(255, 255, 255, .1);
 }
 
 .cg-memo-panel {
