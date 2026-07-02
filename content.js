@@ -1,23 +1,9 @@
 const STORAGE_KEY = `chatgpt-memo-markers:${location.pathname}`;
-const PANEL_COLLAPSED_KEY = `chatgpt-memo-panel-collapsed:${location.pathname}`;
-const SMALL_SCREEN_QUERY = '(max-width: 1430px), (max-height: 760px)';
-let isPanelCollapsed = window.matchMedia(SMALL_SCREEN_QUERY).matches;
-
-try {
-  const storedPanelState = localStorage.getItem(PANEL_COLLAPSED_KEY);
-  if (storedPanelState !== null) {
-    isPanelCollapsed = storedPanelState === '1';
-  }
-} catch (error) {
-  console.warn('ChatGPT Memo Marker: panel state load failed', error);
-}
+let isPanelCollapsed = true;
+let activePanelItemId = null;
 
 function savePanelCollapsedState() {
-  try {
-    localStorage.setItem(PANEL_COLLAPSED_KEY, isPanelCollapsed ? '1' : '0');
-  } catch (error) {
-    console.warn('ChatGPT Memo Marker: panel state save failed', error);
-  }
+  // Keep panel open/closed state only for the current page lifetime.
 }
 
 /**
@@ -28,6 +14,32 @@ function savePanelCollapsedState() {
  */
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+function canUseChromeStorage() {
+  return typeof chrome !== 'undefined' && chrome.storage?.local;
+}
+
+function isExtensionContextError(error) {
+  return String(error?.message ?? error).includes('Extension context invalidated');
+}
+
+function loadItemsFromLocalStorage() {
+  try {
+    const storedItems = localStorage.getItem(STORAGE_KEY);
+    return storedItems ? JSON.parse(storedItems) : [];
+  } catch (error) {
+    console.warn('ChatGPT Memo Marker: local fallback load failed', error);
+    return [];
+  }
+}
+
+function saveItemsToLocalStorage(items) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+  } catch (error) {
+    console.warn('ChatGPT Memo Marker: local fallback save failed', error);
+  }
+}
+
 /**
  * 現在の ChatGPT ページに紐づく保存済みメモ一覧を読み込みます。
  *
@@ -35,9 +47,17 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
  */
 async function loadItems() {
   try {
+    if (!canUseChromeStorage()) {
+      return loadItemsFromLocalStorage();
+    }
+
     const result = await chrome.storage.local.get(STORAGE_KEY);
     return result[STORAGE_KEY] ?? [];
   } catch (error) {
+    if (isExtensionContextError(error)) {
+      return loadItemsFromLocalStorage();
+    }
+
     console.warn('ChatGPT Memo Marker: load failed', error);
     return [];
   }
@@ -51,8 +71,18 @@ async function loadItems() {
  */
 async function saveItems(items) {
   try {
+    if (!canUseChromeStorage()) {
+      saveItemsToLocalStorage(items);
+      return;
+    }
+
     await chrome.storage.local.set({ [STORAGE_KEY]: items });
   } catch (error) {
+    if (isExtensionContextError(error)) {
+      saveItemsToLocalStorage(items);
+      return;
+    }
+
     console.warn('ChatGPT Memo Marker: save failed', error);
   }
 }
@@ -139,6 +169,131 @@ function createTitle(text) {
  */
 function createId() {
   return crypto.randomUUID();
+}
+
+function getControlLabel(control) {
+  return [
+    control.getAttribute('aria-label'),
+    control.getAttribute('title'),
+    control.textContent
+  ].filter(Boolean).join(' ').trim();
+}
+
+function getDirectChild(container, descendant) {
+  let current = descendant;
+
+  while (current && current.parentElement !== container) {
+    current = current.parentElement;
+  }
+
+  return current?.parentElement === container ? current : null;
+}
+
+function isVisibleElement(el) {
+  const rect = el.getBoundingClientRect();
+  const style = window.getComputedStyle(el);
+  return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+}
+
+function findHeaderActionsMount() {
+  const controls = Array.from(document.querySelectorAll('button, a'))
+    .filter(control => !control.closest('.cg-memo-header-host') && isVisibleElement(control));
+  const shareControl = controls.find(control =>
+    /\bShare\b|\u5171\u6709|\u30b7\u30a7\u30a2/.test(getControlLabel(control))
+  );
+  const fallbackControl = controls.find(control =>
+    /\bShare\b|\u5171\u6709|\u30b7\u30a7\u30a2|PDF|\bMore\b|\u22ef|\u2026/.test(getControlLabel(control))
+  );
+  const anchorControl = shareControl ?? fallbackControl;
+
+  if (!anchorControl) {
+    return null;
+  }
+
+  let current = anchorControl.parentElement;
+  while (current && current !== document.body) {
+    const style = window.getComputedStyle(current);
+    const directControls = Array.from(current.children)
+      .filter(child => child.matches?.('button, a, div'));
+
+    if (style.display.includes('flex') && style.flexDirection !== 'column' && directControls.length >= 2) {
+      return {
+        container: current,
+        before: shareControl && current.contains(shareControl)
+          ? getDirectChild(current, shareControl)
+          : null
+      };
+    }
+
+    current = current.parentElement;
+  }
+
+  return {
+    container: anchorControl.parentElement,
+    before: shareControl?.parentElement === anchorControl.parentElement ? shareControl : null
+  };
+}
+
+function ensurePanelMount() {
+  let host = document.querySelector('.cg-memo-header-host');
+  const mount = findHeaderActionsMount();
+  const target = mount?.container;
+
+  if (!host) {
+    host = document.createElement('div');
+    host.className = 'cg-memo-header-host';
+  }
+
+  if (target && (host.parentElement !== target || (mount.before && host.nextSibling !== mount.before))) {
+    target.insertBefore(host, mount.before);
+    host.classList.remove('cg-memo-header-host--fallback');
+  } else if (!target && host.parentElement !== document.body) {
+    document.body.appendChild(host);
+    host.classList.add('cg-memo-header-host--fallback');
+  }
+
+  return host;
+}
+
+function getMemoPanel() {
+  let panel = document.querySelector('.cg-memo-panel');
+
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.className = 'cg-memo-panel';
+    panel.setAttribute('role', 'dialog');
+    panel.setAttribute('aria-label', 'ChatGPT Memo');
+    document.body.appendChild(panel);
+  }
+
+  return panel;
+}
+
+function removeMemoPanel() {
+  document.querySelector('.cg-memo-panel')?.remove();
+}
+
+function positionMemoPanel(host) {
+  const panel = document.querySelector('.cg-memo-panel');
+  const button = host.querySelector('.cg-memo-header-button');
+
+  if (!panel || !button) {
+    return;
+  }
+
+  const rect = button.getBoundingClientRect();
+  const margin = 8;
+  const panelWidth = Math.min(360, window.innerWidth - margin * 2);
+  const top = Math.min(rect.bottom + margin, window.innerHeight - margin);
+  const left = Math.min(
+    Math.max(margin, rect.right - panelWidth),
+    window.innerWidth - panelWidth - margin
+  );
+
+  panel.style.width = `${panelWidth}px`;
+  panel.style.left = `${left}px`;
+  panel.style.top = `${top}px`;
+  panel.style.maxHeight = `${Math.max(160, window.innerHeight - top - margin)}px`;
 }
 
 /**
@@ -267,21 +422,45 @@ async function renderMarkerButtons() {
  * @returns {Promise<void>} パネル描画とイベント登録が完了した後に解決される Promise を返します。
  */
 async function renderPanel(selectedId = null) {
-  let panel = document.querySelector('.cg-memo-panel');
-
-  if (!panel) {
-    panel = document.createElement('div');
-    panel.className = 'cg-memo-panel';
-    document.body.appendChild(panel);
+  if (selectedId !== null) {
+    activePanelItemId = selectedId;
   }
 
   const items = await loadItems();
-  const selectedItem = selectedId
-    ? items.find(item => item.id === selectedId)
+  const selectedItem = activePanelItemId
+    ? items.find(item => item.id === activePanelItemId)
     : null;
 
+  if (activePanelItemId && !selectedItem) {
+    activePanelItemId = null;
+  }
+
+  const host = ensurePanelMount();
+  host.innerHTML = '';
+
+  const triggerButton = document.createElement('button');
+  triggerButton.type = 'button';
+  triggerButton.className = 'cg-memo-header-button';
+  triggerButton.textContent = `ChatGPT Memo (${items.length})`;
+  triggerButton.setAttribute('aria-haspopup', 'dialog');
+  triggerButton.setAttribute('aria-expanded', String(!isPanelCollapsed));
+
+  triggerButton.addEventListener('click', async (event) => {
+    event.stopPropagation();
+    isPanelCollapsed = !isPanelCollapsed;
+    savePanelCollapsedState();
+    await renderPanel();
+  });
+
+  host.appendChild(triggerButton);
+
+  if (isPanelCollapsed) {
+    removeMemoPanel();
+    return;
+  }
+
+  const panel = getMemoPanel();
   panel.innerHTML = '';
-  panel.classList.toggle('cg-memo-panel--collapsed', isPanelCollapsed);
 
   const header = document.createElement('div');
   header.className = 'cg-memo-title';
@@ -293,29 +472,26 @@ async function renderPanel(selectedId = null) {
   const toggleButton = document.createElement('button');
   toggleButton.type = 'button';
   toggleButton.className = 'cg-memo-toggle-button';
-  toggleButton.textContent = isPanelCollapsed ? '開く' : '閉じる';
+  toggleButton.textContent = '閉じる';
   toggleButton.setAttribute(
     'aria-label',
-    isPanelCollapsed ? 'メモ一覧パネルを開く' : 'メモ一覧パネルを閉じる'
+    'メモ一覧パネルを閉じる'
   );
 
   toggleButton.addEventListener('click', async () => {
-    isPanelCollapsed = !isPanelCollapsed;
+    isPanelCollapsed = true;
     savePanelCollapsedState();
-    await renderPanel(selectedId);
+    await renderPanel();
   });
 
   header.appendChild(toggleButton);
   panel.appendChild(header);
 
-  if (isPanelCollapsed) {
-    return;
-  }
-
   if (items.length === 0) {
     const empty = document.createElement('div');
     empty.textContent = '保存済みメモはありません';
     panel.appendChild(empty);
+    positionMemoPanel(host);
     return;
   }
 
@@ -325,11 +501,12 @@ async function renderPanel(selectedId = null) {
     title.textContent = `${item.title}`;
 
     title.addEventListener('click', async () => {
-      if (selectedItem && selectedItem.id === item.id) {
-        await renderPanel();
+      if (activePanelItemId === item.id) {
+        activePanelItemId = null;
       } else {
-        await renderPanel(item.id);
+        activePanelItemId = item.id;
       }
+      await renderPanel();
     });
 
     panel.appendChild(title);
@@ -338,6 +515,8 @@ async function renderPanel(selectedId = null) {
       panel.appendChild(createMemoDetail(selectedItem));
     }
   });
+
+  positionMemoPanel(host);
 }
 
 function createMemoDetail(selectedItem) {
@@ -429,8 +608,34 @@ async function init() {
   await renderPanel();
   await renderMarkerButtons();
 
+  document.addEventListener('click', async (event) => {
+    if (isPanelCollapsed) return;
+    if (event.target.closest('.cg-memo-header-host')) return;
+    if (event.target.closest('.cg-memo-panel')) return;
+
+    isPanelCollapsed = true;
+    savePanelCollapsedState();
+    await renderPanel();
+  });
+
+  window.addEventListener('resize', () => {
+    if (isPanelCollapsed) return;
+
+    const host = document.querySelector('.cg-memo-header-host');
+    if (host) {
+      positionMemoPanel(host);
+    }
+  });
+
   const observer = new MutationObserver(async () => {
     await renderMarkerButtons();
+
+    const host = document.querySelector('.cg-memo-header-host');
+    if (!host || host.classList.contains('cg-memo-header-host--fallback')) {
+      await renderPanel();
+    } else if (!isPanelCollapsed) {
+      positionMemoPanel(host);
+    }
   });
 
   observer.observe(document.body, {
